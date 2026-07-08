@@ -255,6 +255,44 @@ uv run python -m lakehouse_mcp --transport streamable-http --host 127.0.0.1 --po
 
 > **Security note:** The `streamable-http` transport has no built-in authentication layer. The server uses your `WATSONX_DATA_API_KEY` to authenticate all requests to IBM Cloud on your behalf. If you bind to `0.0.0.0` (all interfaces), any client that can reach that port can invoke all tools under your IAM identity without supplying any credentials. Only use `--host 0.0.0.0` in a trusted network environment and place a reverse proxy (e.g. nginx) with authentication in front of the MCP endpoint. For single-user local use, always prefer `--host 127.0.0.1` or the default `stdio` transport.
 
+## Azure and AWS Deployments (Experimental)
+
+> **Experimental:** Support for watsonx.data on Azure and AWS is under active development. APIs and configuration fields may change.
+
+When your `WATSONX_DATA_BASE_URL` hostname contains `azure` or `aws`, the server automatically switches from IBM Cloud IAM to the account-IAM authentication service. No other code changes are required.
+
+### Additional Configuration Fields
+
+| Environment Variable | Required | Description |
+|---|---|---|
+| `WATSONX_DATA_ACCOUNT_IAM_HOST` | Yes | account-IAM host, e.g. `https://account-iam.azure.eastus.platform.saas.ibm.com` |
+| `WATSONX_DATA_ACCOUNT_IAM_SERVICE_ID` | No | account-IAM service ID. If omitted, derived automatically from the CRN (`WATSONX_DATA_INSTANCE_ID`) |
+
+The service ID is the 8th colon-delimited segment of the CRN. For example, given:
+```
+crn:v1:azure-staging:public:lakehouse:eastus:sub/<sub-id>:20260218-0442-1418-82be-58ae15f52489::
+```
+the service ID `20260218-0442-1418-82be-58ae15f52489` is derived automatically.
+
+### Example Configuration (Azure)
+
+```json
+{
+  "mcpServers": {
+    "IBM watsonx.data MCP Server": {
+      "command": "/path/to/ibm-watsonxdata-mcp-server",
+      "args": ["--transport", "stdio"],
+      "env": {
+        "WATSONX_DATA_BASE_URL": "https://console-azure-canadacentral.lakehouse.saas.ibm.com/lakehouse/api",
+        "WATSONX_DATA_API_KEY": "your_account_iam_api_key_here",
+        "WATSONX_DATA_INSTANCE_ID": "crn:v1:azure-staging:public:lakehouse:canadacentral:sub/<sub-id>:<service-id>::",
+        "WATSONX_DATA_ACCOUNT_IAM_HOST": "https://account-iam.azure.canadacentral.platform.saas.ibm.com"
+      }
+    }
+  }
+}
+```
+
 ## Available Tools
 ### Quick Reference
 

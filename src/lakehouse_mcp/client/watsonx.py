@@ -1,8 +1,9 @@
 """
-watsonx.data REST API client with IBM IAM authentication.
+watsonx.data REST API client with IAM authentication.
 
 This module provides async HTTP client for watsonx.data API with:
-- IBM Cloud IAM authentication
+- IBM Cloud IAM authentication (IBM deployments)
+- Azure account-IAM authentication (Azure and AWS deployments)
 - Automatic token refresh
 - OpenTelemetry instrumentation
 - Structured logging
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
+from lakehouse_mcp.client.account_iam_authenticator import AccountIAMAuthenticator
 from lakehouse_mcp.observability import get_logger, get_tracer
 
 if TYPE_CHECKING:
@@ -38,16 +40,23 @@ class WatsonXClient:
         self.config = config
         self.logger = logger
 
-        # Create IBM IAM authenticator
-        self.authenticator = IAMAuthenticator(
-            apikey=config.api_key,
-            disable_ssl_verification=config.tls_insecure_skip_verify,
-        )
+        if config.hyperscaler != "ibm":
+            self.authenticator = AccountIAMAuthenticator(
+                apikey=config.api_key,
+                service_id=config.account_iam_service_id,  # type: ignore[arg-type]
+                host=config.account_iam_host,  # type: ignore[arg-type]
+                disable_ssl_verification=config.tls_insecure_skip_verify,
+            )
+        else:
+            self.authenticator = IAMAuthenticator(
+                apikey=config.api_key,
+                disable_ssl_verification=config.tls_insecure_skip_verify,
+            )
 
-        # Create async HTTP client with httpx
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(config.timeout_seconds),
             verify=not config.tls_insecure_skip_verify,
+            follow_redirects=True,
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
@@ -59,6 +68,7 @@ class WatsonXClient:
             "watsonx_client_initialized",
             base_url=config.base_url,
             timeout=config.timeout_seconds,
+            hyperscaler=config.hyperscaler,
         )
 
     async def __aenter__(self) -> WatsonXClient:
@@ -74,12 +84,7 @@ class WatsonXClient:
         await self.client.aclose()
 
     async def _get_auth_header(self) -> dict[str, str]:
-        """Get IBM IAM authorization header.
-
-        Returns:
-            Authorization header dict
-        """
-        # IBM SDK's token_manager handles automatic refresh
+        """Get authorization header with a valid bearer token."""
         token = self.authenticator.token_manager.get_token()
         return {"Authorization": f"Bearer {token}"}
 
